@@ -4,11 +4,15 @@
   <arg name="points_topic" default="points_raw" />
   <arg name="output_log" default="false" />
   <arg name="intensity_threshold" default="1"/>
+  <arg name="max_z" default="200"/>
+  <arg name="min_z" default="0"/>
 
   <node pkg="points_downsampler" name="$(arg node_name)" type="$(arg node_name)">
     <param name="points_topic" value="$(arg points_topic)" />
     <remap from="/points_raw" to="/sync_drivers/points_raw" if="$(arg sync)" />
     <param name="output_log" value="$(arg output_log)" />
     <param name="intensity_threshold" value="$(arg intensity_threshold)" />
+    <param name="max_z" value="$(arg max_z)"/>
+    <param name="min_z" value="$(arg min_z)"/>
   </node>
 </launch>

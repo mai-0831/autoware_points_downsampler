@@ -50,6 +50,8 @@ static std::string POINTS_TOPIC;
 static double measurement_range = MAX_MEASUREMENT_RANGE;
 
 static int INTENSITY_THRESHOLD = 100;
+static int _max_z = MAX_MEASUREMENT_RANGE;
+static int _min_z = 0;
 
 
 static void config_callback(const autoware_config_msgs::ConfigVoxelGridFilter::ConstPtr& input)
@@ -70,12 +72,24 @@ static void scan_callback(const sensor_msgs::PointCloud2::ConstPtr& input)
   pcl::PointCloud<pcl::PointXYZI>::Ptr scan_ptr(new pcl::PointCloud<pcl::PointXYZI>(scan));
   pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_scan_ptr(new pcl::PointCloud<pcl::PointXYZI>());
   pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_intensity_ptr(new pcl::PointCloud<pcl::PointXYZI>());
+  pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_z_ptr(new pcl::PointCloud<pcl::PointXYZI>());
 
   sensor_msgs::PointCloud2 filtered_msg;
 
   filter_start = std::chrono::system_clock::now();
 
   pcl::PassThrough<pcl::PointXYZI> pass;
+  pass.setInputCloud(scan_ptr);
+  pass.setFilterFieldName("intensity");
+  pass.setFilterLimits(INTENSITY_THRESHOLD, FLT_MAX);
+  pass.filter(*filtered_intensity_ptr);
+
+  pcl::PassThrough<pcl::PointXYZI> pass_z;
+  pass_z.setInputCloud(filtered_intensity_ptr);
+  pass_z.setFilterFieldName("z");
+  pass_z.setFilterLimits(_min_z, _max_z);
+  pass_z.filter(*filtered_z_ptr);
+
 
   // if voxel_leaf_size < 0.1 voxel_grid_filter cannot down sample (It is specification in PCL)
   if (voxel_leaf_size >= 0.1)
@@ -83,24 +97,15 @@ static void scan_callback(const sensor_msgs::PointCloud2::ConstPtr& input)
     // Downsampling the velodyne scan using VoxelGrid filter
     pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_filter;
     voxel_grid_filter.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
-    voxel_grid_filter.setInputCloud(scan_ptr);
+    voxel_grid_filter.setInputCloud(filtered_z_ptr);
     voxel_grid_filter.filter(*filtered_scan_ptr);
 
-    pass.setInputCloud(filtered_scan_ptr);
-    pass.setFilterFieldName("intensity");
-    pass.setFilterLimits(INTENSITY_THRESHOLD, FLT_MAX);
-    pass.filter(*filtered_intensity_ptr);
 
-    pcl::toROSMsg(*filtered_intensity_ptr, filtered_msg);
+    pcl::toROSMsg(*filtered_scan_ptr, filtered_msg);
   }
   else
   {
-    pass.setInputCloud(filtered_scan_ptr);
-    pass.setFilterFieldName("i");
-    pass.setFilterLimits(INTENSITY_THRESHOLD, FLT_MAX);
-    pass.filter(*filtered_intensity_ptr);
-
-    pcl::toROSMsg(*filtered_intensity_ptr, filtered_msg);
+    pcl::toROSMsg(*filtered_scan_ptr, filtered_msg);
   }
 
   filter_end = std::chrono::system_clock::now();
@@ -154,6 +159,8 @@ int main(int argc, char** argv)
   private_nh.getParam("points_topic", POINTS_TOPIC);
   private_nh.getParam("output_log", _output_log);
   private_nh.getParam("intensity_threshold", INTENSITY_THRESHOLD);
+  private_nh.getParam("max_z", _max_z);
+  private_nh.getParam("min_z", _min_z);
 
   if(_output_log == true){
 	  char buffer[80];
